@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<script src="https://code.jquery.com/jquery-3.6.3.min.js"></script>
+<script>
+document.title= '踩地雷';
+class MineSweeperGame {
+    constructor(row, col, mineNum){
+        this.row = row
+        this.col = col
+        this.mineNum = mineNum
+
+        this.td_obj = {}
+        this.minePosition = []
+        this.currGridState ={
+            'num' : null,
+            'class' : null,
+            'id' : null,
+            'position' : {'r':null, 'c':null},
+            'f_class' : null,
+            'b_class' : null,
+        }
+        this.f_class_array = ['open', 'tempOpen', 'close']
+        this.b_class_array = ['none', 'flag', 'num']
+        this.gridLeft = this.row*this.col
+        this.timer = null
+        this.endGame = false
+
+        this.init()
+    }
+
+    init(){
+        this.set_td_obj()
+        this.set_mine()
+        this.set_grid_num()
+        this.start_time()
+    }
+    start_time(){
+        $('#flag_time').html(0)
+        this.timer = setInterval(function(){
+            $('#flag_time').html(parseInt($('#flag_time').html())+1)
+        },1000)
+    }
+    stop_timer(){
+        clearInterval(this.timer)
+    }
+
+    set_td_obj(){
+        for(let r=0; r<this.row; r++){
+            for(let c=0; c<this.col; c++){
+                this.td_obj[`td_${r}_${c}`] = {
+                    'num': 0,
+                    'f_class' : 'close',
+                    'b_class' : 'none',
+                }
+            }
+        }
+    }
+
+    set_mine(){
+        for(let i=0;i<this.mineNum;i++){
+            let r = parseInt(Math.random()*this.row)
+            let c = parseInt(Math.random()*this.col)
+            if(this.td_obj[`td_${r}_${c}`]['num'] != 9){
+                this.td_obj[`td_${r}_${c}`]['num'] = 9
+                this.gridLeft -= 1
+                this.minePosition.push([r, c])
+            }else{
+                i--
+            }
+        }
+        $('#flag_td').html(this.mineNum)
+    }
+
+    is_in_map(targetGridIdx){
+        return targetGridIdx[0] >= 0 && targetGridIdx[1] >= 0 && targetGridIdx[0] < this.row && targetGridIdx[1] < this.col
+    }
+
+    search_near_grid(){
+        let nearGridId = []
+        for(let r=-1; r<=1; r++){
+            for(let c=-1; c<=1; c++){
+                let targetGridIdx = [
+                    this.currGridState.position.r+r, 
+                    this.currGridState.position.c+c
+                ]
+                if(!(r==0 && c==0) && this.is_in_map(targetGridIdx)){
+                    nearGridId.push( `td_${targetGridIdx[0]}_${targetGridIdx[1]}`)
+                }
+            }
+        }
+        return nearGridId
+    }
+
+    set_grid_num(){
+        for(let position of this.minePosition){
+            this.currGridState.position.r = position[0]
+            this.currGridState.position.c = position[1]
+            let gridId_array = this.search_near_grid()
+            for(let id of gridId_array){
+                if (this.td_obj[id]['num'] != 9){
+                    this.td_obj[id]['num'] += 1
+                }
+            }
+        }
+    }
+
+    set_table(table, scoreboard){
+        let inTable = ''
+        for(let r=0;r<this.row;r++){
+            inTable += '<tr>'
+            for(let c=0;c<this.col;c++){
+                let id = `td_${r}_${c}`
+                inTable +=`<td id="${id}" class="close none mine_td"></td>`                
+            }
+            inTable += '</tr>'
+        }
+        table
+        .append(inTable)
+        .css('height', `${this.row*32+1}px`)
+        .css('width', `${this.col*32+1}px`)
+
+        scoreboard
+        .css('height', `30px`)
+        .css('width', `${this.col*32+1}px`)
+    } 
+
+    has_class(grid, ...classNames){
+        let class_str = grid.attr('class')
+        return classNames.every(function(c_n){
+            return class_str.includes(c_n)
+        })
+    }
+
+    get_curr_grid_state(currGrid){
+        let idx = currGrid.attr('id').split('_').slice(1)
+
+        this.currGridState.position.r = parseInt(idx[0])
+        this.currGridState.position.c = parseInt(idx[1])
+        this.currGridState.num = this.td_obj[`td_${idx[0]}_${idx[1]}`]['num']
+        this.currGridState.id = currGrid.attr('id')
+
+        this.currGridState.class = currGrid.attr('class')
+        this.currGridState.f_class = this.td_obj[`td_${idx[0]}_${idx[1]}`]['f_class']
+        this.currGridState.b_class = this.td_obj[`td_${idx[0]}_${idx[1]}`]['b_class']
+    }
+
+    edit_class(grid, remove_class, add_class){
+        if(this.has_class(grid, remove_class)){
+            grid
+            .removeClass(remove_class)
+            .addClass(add_class)
+            this.td_obj[grid.attr('id')][this.f_class_array.includes(add_class) ? 'f_class' :'b_class'] = add_class
+        }
+    }
+
+    work_near_grid(work){
+        let nearGridId = Array.from(this.search_near_grid(), (id, idx)=> '#'+id)
+        let nearFlag = 0
+        for(let td_id of nearGridId){
+            if(this.has_class($(td_id), 'flag')){
+                nearFlag++
+            }
+            if(work == 'tempOpen'){
+                if(this.has_class($(td_id), 'close', 'none')){
+                    this.edit_class($(td_id), 'close', 'tempOpen')
+                }
+            }
+            if(work == 'close'){
+                if(this.has_class($(td_id), 'tempOpen', 'none')){
+                    this.edit_class($(td_id), 'tempOpen', 'close')
+                }
+            }
+        }
+        if(work == 'open'){
+            if(this.currGridState.num == nearFlag || this.currGridState.num == 0){
+                for(let td_id of nearGridId){
+                    this.open_grid($(td_id))
+                }
+            }else{
+                for(let td_id of nearGridId){
+                    if(this.has_class($(td_id), 'tempOpen', 'none')){
+                        this.edit_class($(td_id), 'tempOpen', 'close')
+                    }
+                }
+            }
+        }
+    }
+    
+    open_grid(currGrid){
+        this.get_curr_grid_state(currGrid)
+        if(this.currGridState.f_class == 'open' || this.currGridState.b_class != 'none'){
+            return
+        }
+
+        this.edit_class(currGrid, this.currGridState.f_class, 'open')
+        this.edit_class(currGrid, this.currGridState.b_class, 'num'+this.currGridState.num)
+
+        this.gridLeft -= 1
+
+        if(this.currGridState.num != 0 && this.currGridState.num !=9){
+            currGrid.html(this.currGridState.num)
+        }
+
+        if(this.currGridState.num == 0){
+            currGrid.html('')
+            this.work_near_grid('open')
+        }
+        if(this.gridLeft == 0 || this.currGridState.num == 9){
+            this.end_game()
+        }
+    }
+
+
+    mark_grid(currGrid){
+        this.get_curr_grid_state(currGrid)
+
+        let flagMark = '<div class="flagicon"></div>'
+        // ['none', 'flag']
+        switch(this.currGridState.b_class){
+            case 'none':
+                this.edit_class(currGrid, this.currGridState.b_class, 'flag')
+                currGrid.append(flagMark)
+                $('#flag_td').html(parseInt($('#flag_td').html())-1)
+                break
+            case 'flag':
+                this.edit_class(currGrid, this.currGridState.b_class, 'none')
+                currGrid.html('')
+                $('#flag_td').html(parseInt($('#flag_td').html())+1)
+                break
+        }
+    }
+
+    mousedown(event, currGrid){
+        currGrid.parent().data('mousedownId', currGrid.attr('id'))
+        if(event.which == 1){
+            this.get_curr_grid_state(currGrid)
+            if(this.currGridState.f_class == 'close' && this.currGridState.b_class == 'none'){
+                this.edit_class(currGrid, this.currGridState.f_class, 'tempOpen')
+            }else if(this.currGridState.f_class == 'open'){
+                this.work_near_grid('tempOpen')
+            }
+        }
+    }
+
+    mouseleave(event, currGrid){
+        let id = currGrid.parent().data('mousedownId')
+        if(event.which == 1 && id){
+            if(this.td_obj[id]['f_class'] == 'tempOpen' ){
+                this.edit_class($(`#${id}`), this.td_obj[id]['f_class'], 'close')
+            }
+            if(this.td_obj[id]['f_class'] == 'open'){
+                this.work_near_grid('close')
+            }
+        }
+    }
+
+    mouseup(event, currGrid){
+        if(currGrid.parent().data('mousedownId') == currGrid.attr('id')){
+            if(event.which == 1 ){
+                // this.get_curr_grid_state(currGrid)
+                if(this.currGridState.num != 0 && this.currGridState.f_class == 'open'){
+                    this.work_near_grid('open')
+                }else{
+                    this.open_grid(currGrid)
+                }
+            }
+            if(event.which == 3 ) {
+                this.mark_grid(currGrid)
+            }
+            currGrid.parent().data('mousedownId', null)
+        }
+    }
+
+    end_game(){
+        if(this.gridLeft == 0 ){
+            $('.reload').html('YOU WIN !')
+        }else{
+            $('.reload').html('YOU LOSE !')
+        }
+        this.stop_timer()
+        this.endGame = true
+    }
+}
+
+function set_mine_td_event(newGame){
+    $('.mine_td')
+    .mousedown(function(event){
+        if(newGame !== undefined){
+            newGame.mousedown(event, $(this))
+        }
+    })
+    .mouseleave(function(event){
+        if(newGame !== undefined){
+            newGame.mouseleave(event, $(this))
+        }
+    })
+    .mouseup(function(event){
+        if(newGame !== undefined){
+            newGame.mouseup(event, $(this))
+            if(newGame.endGame){
+                newGame.stop_timer()
+                newGame = undefined
+            }
+        }
+    })
+}
+
+const row_key = 'row_num'
+const col_key = 'col_num'
+const mine_key = 'mine_num'
+
+
+$(function(){
+    if(localStorage.getItem(row_key)){
+        $('#row_inp').val(localStorage.getItem(row_key))
+    }
+    if(localStorage.getItem(col_key)){
+        $('#col_inp').val(localStorage.getItem(col_key))
+    }
+    if(localStorage.getItem(mine_key)){
+        $('#mine_inp').val(localStorage.getItem(mine_key))
+    }
+    let row = parseInt($('#row_inp').val())
+    let col = parseInt($('#col_inp').val())
+    let mineNum = parseInt($('#mine_inp').val())
+    let newGame = new MineSweeperGame(row, col, mineNum)
+    newGame.set_table($('#game_table'), $('.scoreboard'))
+    set_mine_td_event(newGame)
+
+    $('input')
+    .on('input',function(event){
+        localStorage.setItem(row_key, $('#row_inp').val())
+        localStorage.setItem(col_key, $('#col_inp').val())
+        localStorage.setItem(mine_key, $('#mine_inp').val())
+    })
+
+    $('.reload')
+    .click(function(){
+        $(this).html('NEW GAME')
+        newGame.stop_timer()
+
+        let row = parseInt($('#row_inp').val())
+        let col = parseInt($('#col_inp').val())
+        let mineNum = parseInt($('#mine_inp').val())
+        $('#game_table').find('tr').remove()
+        newGame = new MineSweeperGame(row, col, mineNum)
+        newGame.set_table($('#game_table'), $('.scoreboard'))
+        set_mine_td_event(newGame)
+    })
+
+    $('table')
+    .contextmenu(function(event){
+        event.preventDefault()
+    })
+
+    $('div')
+    .contextmenu(function(event){
+        event.stopPropagation()
+    })
+
+    
+})
+</script>
+<style>
+    .flagicon {
+        color: #000;
+        position: absolute;
+        margin-left: 6px;
+        margin-top: -5px;
+        width: 9px;
+        height: 6px;
+        border-radius: 1px;
+        border: solid 1px currentColor;
+    }
+    .flagicon:before {
+        content: '';
+        position: absolute;
+        left: -3px;
+        top: -2px;
+        width: 1px;
+        height: 15px;
+        background-color: currentColor;
+    }
+    .close{
+        box-sizing: border-box; 
+        border: 4px outset gray;
+        background-color: rgb(229, 229, 229);
+        border-radius: 2px;
+    }
+    .open,
+    .tempOpen{
+        box-sizing: border-box; 
+        border: 4px inset gray;
+        border-radius: 2px;
+        user-select: none;
+    }
+    .num0{
+        background-color: gray;
+    }
+    .num1{
+        color: red;
+    }
+    .num2{
+        color: orange;
+    }
+    .num3{
+        color: yellow;
+    }
+    .num4{
+        color: green;
+    }
+    .num5{
+        color: blue;
+    }
+    .num6{
+        color: blueviolet;
+    }
+    .num7{
+        color: purple;
+    }
+    .num8{
+        color: lightcoral;
+    }
+    .num9{
+        background-color: red;
+    }
+    .mine_td{
+        font-size:2px;
+        text-align:center;
+        width: 30px;
+        height: 30px;
+        font-family: fantasy;
+    }
+    .mine_table,
+    table{
+        border: 3px solid black;
+    }
+    #flag_time,#flag_td{
+        font-size:20px;
+        text-align:center;
+        border: 3px solid black;
+        width: 40px;
+    }
+    input{
+        width: 50px;
+    }
+    #btn_td{
+        text-align: center;      
+    }
+</style>
+<body>
+    <div>
+        <table>
+            <tr>
+                <td>
+                    <label>列數</label>
+                    <input 
+                        id="row_inp" 
+                        type="number" 
+                        value=10
+                        oninput="if(value.length>4)value=value.slice(0,3);if(value<1)value=1" >
+                </td>
+                <td>
+                    <label>欄數</label>
+                    <input 
+                        id="col_inp" 
+                        type="number" 
+                        value=10
+                        oninput="if(value.length>4)value=value.slice(0,3);if(value<1)value=1" >
+                </td>
+                <td>
+                    <label>地雷數量</label>
+                    <input 
+                        id="mine_inp" 
+                        type="number" 
+                        value=10
+                        oninput="if(value.length>4)value=value.slice(0,3);if(value<1)value=1" >
+                </td>
+            </tr>
+        </table>
+    </div>
+    <div>
+        <table class="scoreboard">
+            <tr>
+                <td id='flag_td'>0</td>
+                <td id="btn_td"><button class = reload>NEW GAME</button></td>
+                <td id='flag_time'>0</td>
+            </tr>
+        </table>
+        <table id="game_table" class="mine_table"></table>
+    </div>
+</body>
+</html>
