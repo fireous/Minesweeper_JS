@@ -4,11 +4,10 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>踩地雷</title>
 </head>
 <script src="https://code.jquery.com/jquery-3.6.3.min.js"></script>
 <script>
-document.title= '踩地雷';
 class MineSweeperGame {
     constructor(row, col, mineNum){
         this.row = row
@@ -278,11 +277,7 @@ class MineSweeperGame {
     }
 
     end_game(){
-        if(this.gridLeft == 0 ){
-            $('.reload').html('YOU WIN !')
-        }else{
-            $('.reload').html('YOU LOSE !')
-        }
+        $('.reload').html(this.gridLeft == 0 ?'YOU WIN !' : 'YOU LOSE !')
         this.stop_timer()
         this.endGame = true
     }
@@ -427,9 +422,36 @@ $(function(){
     .num8{
         color: lightcoral;
     }
-    .num9{
-        background-color: red;
+    .num9 {
+        position: relative;
+        width: 20px;
+        height: 20px;
     }
+
+    .num9:before {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background-color: #000;
+    }
+
+    .num9:after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        background-color: #FF0000;
+    }
+    
     .mine_td{
         font-size:2px;
         text-align:center;
